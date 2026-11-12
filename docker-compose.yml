@@ -1,0 +1,52 @@
+# Simula três máquinas numa rede própria (equivalente às instâncias A, B e C do AWS.md).
+#
+#   maquina-a  172.28.0.10  servidor REQ/REP, publisher, fontes de tarefas e sink (fazem bind)
+#   maquina-b  172.28.0.11  cliente, subscriber, workers -> acha A pela VARIÁVEL DE AMBIENTE
+#   maquina-c  172.28.0.12  cliente, subscriber, worker  -> acha A pelo ARGUMENTO --host/--src-hosts
+#
+# Uso:
+#   docker compose up -d --build
+#   docker compose exec maquina-a bash          (um terminal em cada "máquina")
+#   ./docker-cenario.sh                        (roda os três padrões automaticamente)
+#   docker compose down
+name: zmq-sd
+
+x-maquina: &maquina
+  image: zmq-sd              # mesma imagem nas três máquinas (construída por maquina-a)
+  pull_policy: never
+  init: true                 # repassa sinais corretamente (Ctrl+C / docker stop)
+  stop_grace_period: 2s
+
+services:
+  maquina-a:
+    <<: *maquina
+    build: .
+    hostname: maquina-a
+    networks:
+      zmqnet:
+        ipv4_address: 172.28.0.10
+
+  maquina-b:
+    <<: *maquina
+    hostname: maquina-b
+    environment:             # endereço de A por variável de ambiente
+      ZMQ_HOST: maquina-a
+      ZMQ_SRC_HOSTS: maquina-a
+      ZMQ_SINK_HOST: maquina-a
+    networks:
+      zmqnet:
+        ipv4_address: 172.28.0.11
+
+  maquina-c:
+    <<: *maquina
+    hostname: maquina-c      # sem variáveis: os comandos passam --host 172.28.0.10
+    networks:
+      zmqnet:
+        ipv4_address: 172.28.0.12
+
+networks:
+  zmqnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
